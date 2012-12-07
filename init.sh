@@ -129,7 +129,7 @@ gv_shell_checkpoint=0
 die()
 {
     local lv_msg="$1"
-	  umount -n /mnt 2>/dev/null
+    umount -n /mnt 2>/dev/null
     echo "${lv_msg}"
     echo 
     echo "Dropping you into a minimal shell..."
@@ -144,7 +144,7 @@ bin_exist()
 check_busybox_applets()
 {
     if [ ! -e "/etc/applets" ]; then
-		    echo "Warning: Cannot check if BusyBox's applets exist(/etc/applets missing)"
+        echo "Warning: Cannot check if BusyBox's applets exist(/etc/applets missing)"
     else
         for i in `cat /etc/applets`; do
             bin_exist ${i} "BusyBox applet" 
@@ -197,7 +197,7 @@ shell_checkpoint() {
     local lv_level=$1
 
     if [ "${gv_shell_checkpoint}" -eq "${lv_level}" ]; then
-		    echo "Checkpoint ${lv_level}" 
+        echo "Checkpoint ${lv_level}" 
         exec /bin/sh
     fi
 }
@@ -302,14 +302,14 @@ do_root_work() {
     exec_cryptsetup "${gv_root_device}" "${uv_root_mapping}" 
     mount -o "${gv_root_mode}" "/dev/mapper/${uv_root_mapping}" /new-root
     if [ "$?" -ne 0 ]; then
-        cryptsetup luksClose "${uv_root_mapping}" 2>/dev/null || cryptsetup remove "${uv_root_mapping}" 	
+        cryptsetup luksClose "${uv_root_mapping}" 2>/dev/null || cryptsetup remove "${uv_root_mapping}" 
         die "Error: mount root failed, dm-crypt mapping closed."
     fi
     shell_checkpoint 5
 }
 
 do_work() {
-    # load kmap and font	
+    # load kmap and font
     if [ -n "${gv_kmap}" ]; then
         if [ -e "/etc/${gv_kmap}" ]; then
             loadkmap < "/etc/${gv_kmap}"
@@ -366,7 +366,7 @@ parse_cmdl_args() {
             ;;
           ikmap=*)
             gv_kmap="`echo "${param}" | cut -d'=' -f2 | cut -d':' -f1`"
-            gv_font="`echo "${param}" | cut -d':' -s -f2`"		
+            gv_font="`echo "${param}" | cut -d':' -s -f2`"
             ;;
           ichkpt=*)
             gv_shell_checkpoint=`echo "${param}" | cut -d'=' -f2`
