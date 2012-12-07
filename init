@@ -47,9 +47,6 @@
 #        == Kernel parameters example ==
 #        o) Partition(s): root -- Key: regular passphrase
 #           root=/dev/sda3 ikmap=es-cp850_i686.bin    
-#        o) Partition(s): root -- Key: regular passphrase -- Extra: fbsplash
-#           root=/dev/sda3 vga=0x318 video=vesafb:mtrr,ywrap \ 
-#           splash=verbose,theme:livecd-2006.0 quiet CONSOLE=/dev/tty1
 #        o) Partition(s): root -- Key: regular keyfile on usb stick
 #           root=/dev/sda3 ikey_root=none:/dev/sdb1:/path/to/keyfile
 #        o) Partition(s): root -- Key: gpg encrypted key on usb stick
@@ -68,10 +65,6 @@
 #       o Your kernel has to support module unloading for rmmod to work.
 #
 # BUGS/KNOWN ISSUES:
-#     (b0) fbsplash: when setting the splash mode from silent to verbose,
-#                 verbose image is not painted and text is not visible.
-#                 WORKAROUND: boot with verbose instead.
-#
 #     (b1) Redirect ugly hotplug messages about usb-stick to /dev/null, it can
 #     be very annoying if they happen to appear when user is asked for passphrase.
 #     WORKAROUND: sleep 5 in main() before calling do_work() 
@@ -129,8 +122,6 @@ uv_root_mapping=root         # self descriptive
 uv_check_env=1               # test if busybox applets exist 
 
 # default values(don't edit)          
-gv_active_splashutil=0
-gv_splash_silent=0
 gv_root_mode=rw
 gv_shell_checkpoint=0
 
@@ -139,7 +130,6 @@ die()
 {
         local lv_msg="$1"
 	      umount -n /mnt 2>/dev/null
-        [ "${gv_splash_silent}" -eq 1 ] && splash_verbose
         echo "${lv_msg}"
         echo 
         echo "Dropping you into a minimal shell..."
@@ -203,53 +193,11 @@ modprobe_group() {
 #        done
 #}
 
-splash_command() {
-        local lv_cmd="$1"
-
-        if [ ${gv_active_splashutil} != 0 ]; then
-                echo "$lv_cmd" > /lib/splash/cache/.splash
-        fi
-}
-
-splash_verbose() {
-        splash_command "set mode verbose" 
-}
-
-splash_silent() {
-        splash_command "set mode silent"
-}
-
-splash_message() {
-        local lv_msg="$1"
-
-        splash_command "set message ${lv_msg}"
-        splash_command "repaint"
-}
-
-splash_setup() {
-	[ "$uv_check_env" -eq 1 ] && bin_exist "splash_util.static" "--"
-        if [ -n "${gv_splash_console}" ]; then
-                exec < "${gv_splash_console}" > "${gv_splash_console}" 2>&1
-        fi
-        [ -e /lib/splash/cache ] || mkdir -p /lib/splash/cache
-        [ -e /lib/splash/cache/.splash ] || mknod /lib/splash/cache/.splash p
-        splash_util.static --daemon "--theme=${gv_splash_theme}"
-        gv_active_splashutil=1
-}
-
-splash_daemon_stop() {
-	if [ "${gv_active_splashutil}" -ne 0 ]; then
-                splash_command "exit"
-                gv_active_splashutil=0
-        fi
-}
-
 shell_checkpoint() {
         local lv_level=$1
 
         if [ "${gv_shell_checkpoint}" -eq "${lv_level}" ]; then
-                splash_verbose
-		echo "Checkpoint ${lv_level}" 
+		            echo "Checkpoint ${lv_level}" 
                 exec /bin/sh
         fi
 }
@@ -257,7 +205,7 @@ shell_checkpoint() {
 get_key() {
 	local lv_mode="${1}"
 	local lv_dev="${2}"
-        gv_filepath="${3}"
+  gv_filepath="${3}"
 	local lv_devname="`echo "${lv_dev}" | cut -d'/' -f3 | tr -d '0-9'`" # for use with /sys/block/ 
 	local lv_filename="`echo "${gv_filepath}" | sed 's/\/.*\///g'`"
 
@@ -361,7 +309,6 @@ do_root_work() {
 }
 
 do_work() {
-	[ "${gv_splash_silent}" -eq 1 ] && splash_verbose
 	# load kmap and font	
 	if [ -n "${gv_kmap}" ]; then
 		if [ -e "/etc/${gv_kmap}" ]; then
@@ -387,9 +334,7 @@ do_switch() {
 	# Unmount everything and switch root filesystems for good:
 	# exec the real init and begin the real boot process.
 	echo > /proc/sys/kernel/hotplug
-	[ "${gv_splash_silent}" -eq 1 ] && splash_silent && splash_message "Switching / ..."
 	echo "Switching / ..."
-	splash_daemon_stop
 	sleep 1
 	/bin/umount -l /proc
 	/bin/umount -l /sys
@@ -418,13 +363,6 @@ parse_cmdl_args() {
 				;;
 			ro)
 				gv_root_mode="ro"
-				;;
-			splash=*)
-				gv_splash_theme="`echo "${param}" | sed 's/.*theme://' | sed 's/,.*//'`"
-				[ -n "`echo ${param} | grep silent`" ] && gv_splash_silent=1
-				;;
-			CONSOLE=*)
-				gv_splash_console="`echo "${param}" | cut -d'=' -f2`"
 				;;
 			ikmap=*)
 				gv_kmap="`echo "${param}" | cut -d'=' -f2 | cut -d':' -f1`"
@@ -463,7 +401,6 @@ main() {
 	/sbin/mdev -s
 	# handle hotplug events
 	echo /sbin/mdev > /proc/sys/kernel/hotplug
-	[ -n "${gv_splash_theme}" ] && splash_setup
 	# fix: /dev/device-mapper should be /dev/mapper/control
 	# otherwise it fails on my amd64 system(busybox v1.2.1), weird that it works
 	# on my laptop(i686, /dev/mapper/control gets created on luksOpen).
