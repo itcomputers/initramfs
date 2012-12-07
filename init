@@ -14,14 +14,12 @@
 #     init specific:       
 #      * ikmap=<kmap>[:<font>]      Load kmap and font(optional).
 #      * rescue                     Drops you into a minimal shell
-#      * iswap=<device>             swap device(eg:/dev/sda2) (required for suspend2 users).
 #      * ichkpt=<n>                 Interrupts init and drops to shell.
 #      * ikey_root=<mode>:<device>:</path/to/file>  
-#      * ikey_swap=<mode>:<device>:</path/to/file>
 #      
 #                      
 #        == About key files ==
-#        For partitions that are encrypted with a key, you must set 'ikey_root' and/or 'ikey_swap' properly,
+#        For partitions that are encrypted with a key, you must set 'ikey_root' properly,
 #       otherwise you'll be asked for the passphrase.
 #       This information is then used to obtain each key file from the specified removable media. 
 #
@@ -128,7 +126,6 @@
 # user defined variables
 uv_init=/sbin/init           # init to execute after switching to real root
 uv_root_mapping=root         # self descriptive
-uv_swap_mapping=swap	     # ^^
 uv_check_env=1               # test if busybox applets exist 
 
 # default values(don't edit)          
@@ -363,20 +360,6 @@ do_root_work() {
 	shell_checkpoint 5
 }
 
-do_swap_work() {
-      	if [ -n "${gv_key_swap_mode}" ]; then
-               	# if 'init_key_swap' arg was given
-                [ -n "${gv_key_swap_device}" ] || die "Error: init_key_swap : device field empty."
-                [ -n "${gv_key_swap_filepath}" ] || die "Error: init_key_swap: filepath field empty."
-
-                get_key "${gv_key_swap_mode}" "${gv_key_swap_device}" "${gv_key_swap_filepath}"
-	fi
-	shell_checkpoint 2
-	echo "Partition: swap"  
-        exec_cryptsetup "${gv_swap_device}" "${uv_swap_mapping}"
-	shell_checkpoint 3
-}
-
 do_work() {
 	[ "${gv_splash_silent}" -eq 1 ] && splash_verbose
 	# load kmap and font	
@@ -450,22 +433,12 @@ parse_cmdl_args() {
 			ichkpt=*)
 				gv_shell_checkpoint=`echo "${param}" | cut -d'=' -f2`
 				;;
-			iswap=*)
-				gv_swap_device="`echo "${param}" | cut -d'=' -f2 | cut -d':' -f1`"
-				;;
 			ikey_root=*)
 				x="`echo "${param}" | cut -d'=' -f2 | tr ":" " "`"
 				gv_key_root_mode="`echo ${x} | cut -d' ' -f1`"
 				gv_key_root_device="`echo ${x} | cut -d' ' -s -f2`"
 				gv_key_root_filepath="`echo ${x} | cut -d' ' -s -f3`"
 				;;
-			ikey_swap=*)
-				x="`echo "${param}" | cut -d'=' -f2 | tr ":" " "`"
-				gv_key_swap_mode="`echo ${x} | cut -d' ' -f1`"
-				gv_key_swap_device="`echo ${x} | cut -d' ' -s -f2`"
-				gv_key_swap_filepath="`echo ${x} | cut -d' ' -s -f3`"
-				;;
-	   	 esac
 	done
 }
 
