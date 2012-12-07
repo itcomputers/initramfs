@@ -128,287 +128,288 @@ gv_shell_checkpoint=0
 # functions
 die()
 {
-        local lv_msg="$1"
-	      umount -n /mnt 2>/dev/null
-        echo "${lv_msg}"
-        echo 
-        echo "Dropping you into a minimal shell..."
-        exec /bin/sh
+    local lv_msg="$1"
+	  umount -n /mnt 2>/dev/null
+    echo "${lv_msg}"
+    echo 
+    echo "Dropping you into a minimal shell..."
+    exec /bin/sh
 }
 
 bin_exist()
 {
-	[ ! -e "/bin/${1}" ] && [ ! -e "/sbin/${1}" ] && die "Error: ${2} ${1} not found."
+    [ ! -e "/bin/${1}" ] && [ ! -e "/sbin/${1}" ] && die "Error: ${2} ${1} not found."
 }
 
 check_busybox_applets()
 {
-	if [ ! -e "/etc/applets" ]; then
-		echo "Warning: Cannot check if BusyBox's applets exist(/etc/applets missing)"
-	else
-		for i in `cat /etc/applets`; do
-			bin_exist ${i} "BusyBox applet" 
-		done
-	fi
+    if [ ! -e "/etc/applets" ]; then
+		    echo "Warning: Cannot check if BusyBox's applets exist(/etc/applets missing)"
+    else
+        for i in `cat /etc/applets`; do
+            bin_exist ${i} "BusyBox applet" 
+        done
+    fi
 }
 
 rmmod_group() {
-        local lv_group="$1"
-        local lv_invert
-        local lv_mod
+    local lv_group="$1"
+    local lv_invert
+    local lv_mod
 
-        if [ -f "/etc/modules/${lv_group}" ]; then
-                for mod in `cat "/etc/modules/${lv_group}"`; do
-                        invert="${lv_mod} ${lv_invert}"
-                done
+    if [ -f "/etc/modules/${lv_group}" ]; then
+        for mod in `cat "/etc/modules/${lv_group}"`; do
+            invert="${lv_mod} ${lv_invert}"
+        done
 
-                for mod in ${lv_invert}; do
-                        #
-                        # There are some modules that cannot
-                        # be unloaded
-                        #
-                        if [ "${lv_mod}" != "unix" ]; then
-                                rmmod "`echo "${lv_mod}" | sed 's/-/_/g'`"
-                        fi
-                done
-        fi
+        for mod in ${lv_invert}; do
+            #
+            # There are some modules that cannot
+            # be unloaded
+            #
+            if [ "${lv_mod}" != "unix" ]; then
+                rmmod "`echo "${lv_mod}" | sed 's/-/_/g'`"
+            fi
+        done
+    fi
 }
 
 modprobe_group() {
-        local lv_group="$1"
-        local lv_mod
+    local lv_group="$1"
+    local lv_mod
 
-        if [ -f "/etc/modules/${lv_group}" ]; then
-                for mod in `cat "/etc/modules/${lv_group}"`; do
-                        modprobe "${lv_mod}" > /dev/null 2>&1
-                done
-        fi
+    if [ -f "/etc/modules/${lv_group}" ]; then
+        for mod in `cat "/etc/modules/${lv_group}"`; do
+            modprobe "${lv_mod}" > /dev/null 2>&1
+        done
+    fi
 }
 
 #killallwait() { # no use for it yet
-#        local lv_p="$1"
-#
-#        while killall -q -3 "${lv_p}"; do
-#                sleep 1
-#        done
+#    local lv_p="$1"
+#   
+#    while killall -q -3 "${lv_p}"; do
+#        sleep 1
+#    done
 #}
 
 shell_checkpoint() {
-        local lv_level=$1
+    local lv_level=$1
 
-        if [ "${gv_shell_checkpoint}" -eq "${lv_level}" ]; then
-		            echo "Checkpoint ${lv_level}" 
-                exec /bin/sh
-        fi
+    if [ "${gv_shell_checkpoint}" -eq "${lv_level}" ]; then
+		    echo "Checkpoint ${lv_level}" 
+        exec /bin/sh
+    fi
 }
 
 get_key() {
-	local lv_mode="${1}"
-	local lv_dev="${2}"
-  gv_filepath="${3}"
-	local lv_devname="`echo "${lv_dev}" | cut -d'/' -f3 | tr -d '0-9'`" # for use with /sys/block/ 
-	local lv_filename="`echo "${gv_filepath}" | sed 's/\/.*\///g'`"
+    local lv_mode="${1}"
+    local lv_dev="${2}"
+    gv_filepath="${3}"
+    local lv_devname="`echo "${lv_dev}" | cut -d'/' -f3 | tr -d '0-9'`" # for use with /sys/block/ 
+    local lv_filename="`echo "${gv_filepath}" | sed 's/\/.*\///g'`"
 
-	modprobe_group remdev
-	# wait for device
-	local lv_first_time=1
-	while ! mount -n -o ro "${lv_dev}" /mnt 2>/dev/null >/dev/null 
-	do
-		if [ "${lv_first_time}" != 0 ]; then
-			echo "Insert removable device and press Enter."
-			read x
-			echo "Please wait a few seconds...."
-			lv_first_time=0
-		else
-			[ ! -e "/sys/block/${lv_devname}" ] && echo "Info: /sys/block/${lv_devname} does not exist."
-			[ ! -e "${lv_dev}" ] && echo "Info: ${lv_dev} does not exist."
-		fi
-		sleep 5
-	done
-	echo "Info: Removable device mounted."
-	# check if keyfile exist
-	if [ ! -e "/mnt/${gv_filepath}" ]; then
-	 	die "Error: ${gv_filepath} does not exist on ${lv_dev}."
-	fi
-	# get the key
-	case "$lv_mode" in
-		gpg)    # key will be piped into cryptsetup as a passphrase in exec_cryptsetup()
-			[ "$uv_check_env" -eq 1 ] && bin_exist "gpg" "--"
-			gv_key_gpg=1
-			;;
-		none)
-			gv_key_file="/mnt/${gv_filepath}"
-			;;
-		*)
-			die "Error: ${lv_mode} is not valid."
-			;; 
-	esac
+    modprobe_group remdev
+    # wait for device
+    local lv_first_time=1
+    while ! mount -n -o ro "${lv_dev}" /mnt 2>/dev/null >/dev/null 
+        do
+            if [ "${lv_first_time}" != 0 ]; then
+                echo "Insert removable device and press Enter."
+                read x
+                echo "Please wait a few seconds...."
+                lv_first_time=0
+            else
+                [ ! -e "/sys/block/${lv_devname}" ] && echo "Info: /sys/block/${lv_devname} does not exist."
+                [ ! -e "${lv_dev}" ] && echo "Info: ${lv_dev} does not exist."
+            fi
+            sleep 5
+        done
+    echo "Info: Removable device mounted."
+    # check if keyfile exist
+    if [ ! -e "/mnt/${gv_filepath}" ]; then
+        die "Error: ${gv_filepath} does not exist on ${lv_dev}."
+    fi
+    # get the key
+    case "$lv_mode" in
+        gpg)    # key will be piped into cryptsetup as a passphrase in exec_cryptsetup()
+          [ "$uv_check_env" -eq 1 ] && bin_exist "gpg" "--"
+          gv_key_gpg=1
+          ;;
+        none)
+          gv_key_file="/mnt/${gv_filepath}"
+          ;;
+        *)
+          die "Error: ${lv_mode} is not valid."
+        ;; 
+    esac
 }
 
 exec_cryptsetup() {  # 1 is device, 2 is mapping
-	local lv_arg1="create"
-	local lv_arg2="${2}"
-	local lv_arg3="${1}"
+    local lv_arg1="create"
+    local lv_arg2="${2}"
+    local lv_arg3="${1}"
 
-	cryptsetup isLuks "${1}" 2>/dev/null && { lv_arg1="luksOpen"; lv_arg2="${1}"; lv_arg3="${2}"; }
+    cryptsetup isLuks "${1}" 2>/dev/null && { lv_arg1="luksOpen"; lv_arg2="${1}"; lv_arg3="${2}"; }
 
-	if [ -n "${gv_key_gpg}" ]; then
-		modprobe_group gpg
-		# Fixup gpg tty requirement
-		mv /dev/tty /dev/tty.org
-		cp -a /dev/console /dev/tty
-		while [ ! -e "/dev/mapper/${2}" ]
-		do
-			sleep 2
-			gpg --quiet --homedir / --logger-file /dev/null --decrypt /mnt/${gv_filepath} | \
-			cryptsetup "${lv_arg1}" "${lv_arg2}" "${lv_arg3}" 2>/dev/null
-		done
-		rm /dev/tty
-		mv /dev/tty.org /dev/tty
-		rmmod_group gpg
-		umount -n /mnt
-		rmmod_group remdev
-		gv_key_gpg=
-	else
-		if [ -n "${gv_key_file}" ]; then
-			cryptsetup -d "${gv_key_file}" "${lv_arg1}" "${lv_arg2}" "${lv_arg3}"
-	                if [ "$?" -ne 0 ]; then
-                                die "Error: e1 failed to decrypt ${1}."
-               	        fi
-			umount -n /mnt
-			rmmod_group remdev
-			gv_key_file=
-		else
-			cryptsetup "${lv_arg1}" "${lv_arg2}" "${lv_arg3}"
-			if [ "$?" -ne 0 ]; then
-                               	die "Error: e2 failed to decrypt ${1}."
-                       	fi
-		fi
-	fi
+    if [ -n "${gv_key_gpg}" ]; then
+        modprobe_group gpg
+        # Fixup gpg tty requirement
+        mv /dev/tty /dev/tty.org
+        cp -a /dev/console /dev/tty
+        while [ ! -e "/dev/mapper/${2}" ]
+          do
+            sleep 2
+            gpg --quiet --homedir / --logger-file /dev/null --decrypt /mnt/${gv_filepath} | \
+            cryptsetup "${lv_arg1}" "${lv_arg2}" "${lv_arg3}" 2>/dev/null
+          done
+        rm /dev/tty
+        mv /dev/tty.org /dev/tty
+        rmmod_group gpg
+        umount -n /mnt
+        rmmod_group remdev
+        gv_key_gpg=
+    else
+        if [ -n "${gv_key_file}" ]; then
+            cryptsetup -d "${gv_key_file}" "${lv_arg1}" "${lv_arg2}" "${lv_arg3}"
+            if [ "$?" -ne 0 ]; then
+                die "Error: e1 failed to decrypt ${1}."
+            fi
+            umount -n /mnt
+            rmmod_group remdev
+            gv_key_file=
+        else
+            cryptsetup "${lv_arg1}" "${lv_arg2}" "${lv_arg3}"
+            if [ "$?" -ne 0 ]; then
+                die "Error: e2 failed to decrypt ${1}."
+            fi
+        fi
+    fi
 }
 
 do_root_work() {
-	[ -n "${gv_root_device}" ] || die "Error: root missing."
+    [ -n "${gv_root_device}" ] || die "Error: root missing."
 
-	if [ -n "${gv_key_root_mode}" ]; then
-		# if 'init_key_root' arg was given
-		[ -n "${gv_key_root_device}" ] || die "Error: init_key_root: device field empty."
-		[ -n "${gv_key_root_filepath}" ] || die "Error: init_key_root: filepath field empty."
+    if [ -n "${gv_key_root_mode}" ]; then
+        # if 'init_key_root' arg was given
+        [ -n "${gv_key_root_device}" ] || die "Error: init_key_root: device field empty."
+        [ -n "${gv_key_root_filepath}" ] || die "Error: init_key_root: filepath field empty."
 
-		get_key "${gv_key_root_mode}" "${gv_key_root_device}" "${gv_key_root_filepath}"
-	fi
-	shell_checkpoint 4
-	echo "Partition: root"
-	exec_cryptsetup "${gv_root_device}" "${uv_root_mapping}" 
-	mount -o "${gv_root_mode}" "/dev/mapper/${uv_root_mapping}" /new-root
-        if [ "$?" -ne 0 ]; then
-		cryptsetup luksClose "${uv_root_mapping}" 2>/dev/null || cryptsetup remove "${uv_root_mapping}" 	
-        	die "Error: mount root failed, dm-crypt mapping closed."
-        fi
-	shell_checkpoint 5
+        get_key "${gv_key_root_mode}" "${gv_key_root_device}" "${gv_key_root_filepath}"
+    fi
+    shell_checkpoint 4
+    echo "Partition: root"
+    exec_cryptsetup "${gv_root_device}" "${uv_root_mapping}" 
+    mount -o "${gv_root_mode}" "/dev/mapper/${uv_root_mapping}" /new-root
+    if [ "$?" -ne 0 ]; then
+        cryptsetup luksClose "${uv_root_mapping}" 2>/dev/null || cryptsetup remove "${uv_root_mapping}" 	
+        die "Error: mount root failed, dm-crypt mapping closed."
+    fi
+    shell_checkpoint 5
 }
 
 do_work() {
-	# load kmap and font	
-	if [ -n "${gv_kmap}" ]; then
-		if [ -e "/etc/${gv_kmap}" ]; then
-			loadkmap < "/etc/${gv_kmap}"
-		else
-			die "Error: keymap ${gv_kmap} does not exist on /etc"
-		fi
-		if [ -n "${gv_font}" ]; then
-			if [ -e "/etc/${gv_font}" ]; then
-				loadfont < "/etc/${gv_font}"
-			else
-				die "Error: font ${gv_font} does not exist on /etc"
-			fi
-		fi
-	fi
-	print_msg
-	shell_checkpoint 1
-  do_root_work
-  do_switch
+    # load kmap and font	
+    if [ -n "${gv_kmap}" ]; then
+        if [ -e "/etc/${gv_kmap}" ]; then
+            loadkmap < "/etc/${gv_kmap}"
+        else
+            die "Error: keymap ${gv_kmap} does not exist on /etc"
+        fi
+        if [ -n "${gv_font}" ]; then
+            if [ -e "/etc/${gv_font}" ]; then
+                loadfont < "/etc/${gv_font}"
+            else
+                die "Error: font ${gv_font} does not exist on /etc"
+            fi
+        fi
+    fi
+    print_msg
+    shell_checkpoint 1
+    do_root_work
+    do_switch
 }
 
 do_switch() {
-	# Unmount everything and switch root filesystems for good:
-	# exec the real init and begin the real boot process.
-	echo > /proc/sys/kernel/hotplug
-	echo "Switching / ..."
-	sleep 1
-	/bin/umount -l /proc
-	/bin/umount -l /sys
-	/bin/umount -l /dev
-	shell_checkpoint 6
-	exec switch_root /new-root "${uv_init}"
+    # Unmount everything and switch root filesystems for good:
+    # exec the real init and begin the real boot process.
+    echo > /proc/sys/kernel/hotplug
+    echo "Switching / ..."
+    sleep 1
+    /bin/umount -l /proc
+    /bin/umount -l /sys
+    /bin/umount -l /dev
+    shell_checkpoint 6
+    exec switch_root /new-root "${uv_init}"
 }
 
 print_msg() {
-#	clear
-	echo
-	cat /etc/msg 2>/dev/null
-	echo
+#    clear
+    echo
+    cat /etc/msg 2>/dev/null
+    echo
 }
 
 parse_cmdl_args() {
-	local x
-	CMDLINE=`cat /proc/cmdline`
-	for param in $CMDLINE; do
-    		case "${param}" in
-			rescue)
-				gv_shell_checkpoint=1
-				;;
-			root=*)
-				gv_root_device="`echo "${param}" | cut -d'=' -f2`"
-				;;
-			ro)
-				gv_root_mode="ro"
-				;;
-			ikmap=*)
-				gv_kmap="`echo "${param}" | cut -d'=' -f2 | cut -d':' -f1`"
-				gv_font="`echo "${param}" | cut -d':' -s -f2`"		
-				;;
-			ichkpt=*)
-				gv_shell_checkpoint=`echo "${param}" | cut -d'=' -f2`
-				;;
-			ikey_root=*)
-				x="`echo "${param}" | cut -d'=' -f2 | tr ":" " "`"
-				gv_key_root_mode="`echo ${x} | cut -d' ' -f1`"
-				gv_key_root_device="`echo ${x} | cut -d' ' -s -f2`"
-				gv_key_root_filepath="`echo ${x} | cut -d' ' -s -f3`"
-				;;
-	done
+    local x
+    CMDLINE=`cat /proc/cmdline`
+    for param in $CMDLINE; do
+        case "${param}" in
+          rescue)
+            gv_shell_checkpoint=1
+            ;;
+          root=*)
+            gv_root_device="`echo "${param}" | cut -d'=' -f2`"
+            ;;
+          ro)
+            gv_root_mode="ro"
+            ;;
+          ikmap=*)
+            gv_kmap="`echo "${param}" | cut -d'=' -f2 | cut -d':' -f1`"
+            gv_font="`echo "${param}" | cut -d':' -s -f2`"		
+            ;;
+          ichkpt=*)
+            gv_shell_checkpoint=`echo "${param}" | cut -d'=' -f2`
+            ;;
+          ikey_root=*)
+            x="`echo "${param}" | cut -d'=' -f2 | tr ":" " "`"
+            gv_key_root_mode="`echo ${x} | cut -d' ' -f1`"
+            gv_key_root_device="`echo ${x} | cut -d' ' -s -f2`"
+            gv_key_root_filepath="`echo ${x} | cut -d' ' -s -f3`"
+            ;;
+        esac
+    done
 }
 
 main() {
-	export PATH=/sbin:/bin:/usr/bin
-	dmesg -n 1
-  umask 0077
-	[ ! -d /proc ] && mkdir /proc
-	/bin/mount -t proc proc /proc
-  # install busybox applets
-  /bin/busybox --install -s
-	[ "$uv_check_env" -eq 1 ] && check_busybox_applets
-	[ "$uv_check_env" -eq 1 ] && bin_exist "cryptsetup" "--"
-  [ ! -d /tmp ] && mkdir /tmp
-	[ ! -d /mnt ] && mkdir /mnt
-	[ ! -d /new-root ] && mkdir /new-root
-	/bin/mount -t sysfs sysfs /sys
-	parse_cmdl_args
-	modprobe_group boot
-	# populate /dev from /sys
-	/bin/mount -t tmpfs tmpfs /dev
-	/sbin/mdev -s
-	# handle hotplug events
-	echo /sbin/mdev > /proc/sys/kernel/hotplug
-	# fix: /dev/device-mapper should be /dev/mapper/control
-	# otherwise it fails on my amd64 system(busybox v1.2.1), weird that it works
-	# on my laptop(i686, /dev/mapper/control gets created on luksOpen).
-	if [ ! -e "/dev/mapper/control" ]; then
-		# see: /proc/misc, /sys/class/misc/device-mapper/dev 
-		mkdir /dev/mapper && mv /dev/device-mapper /dev/mapper/control
-		echo "device-mapper mapper/control issue fixed.." >> /.initlog
-	fi
-	do_work
+    export PATH=/sbin:/bin:/usr/bin
+    dmesg -n 1
+    umask 0077
+    [ ! -d /proc ] && mkdir /proc
+    /bin/mount -t proc proc /proc
+    # install busybox applets
+    /bin/busybox --install -s
+    [ "$uv_check_env" -eq 1 ] && check_busybox_applets
+    [ "$uv_check_env" -eq 1 ] && bin_exist "cryptsetup" "--"
+    [ ! -d /tmp ] && mkdir /tmp
+    [ ! -d /mnt ] && mkdir /mnt
+    [ ! -d /new-root ] && mkdir /new-root
+    /bin/mount -t sysfs sysfs /sys
+    parse_cmdl_args
+    modprobe_group boot
+    # populate /dev from /sys
+    /bin/mount -t tmpfs tmpfs /dev
+    /sbin/mdev -s
+    # handle hotplug events
+    echo /sbin/mdev > /proc/sys/kernel/hotplug
+    # fix: /dev/device-mapper should be /dev/mapper/control
+    # otherwise it fails on my amd64 system(busybox v1.2.1), weird that it works
+    # on my laptop(i686, /dev/mapper/control gets created on luksOpen).
+    if [ ! -e "/dev/mapper/control" ]; then
+        # see: /proc/misc, /sys/class/misc/device-mapper/dev 
+        mkdir /dev/mapper && mv /dev/device-mapper /dev/mapper/control
+        echo "device-mapper mapper/control issue fixed.." >> /.initlog
+    fi
+    do_work
 }
 main
