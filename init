@@ -13,7 +13,6 @@
 #
 #     init specific:       
 #      * ikmap=<kmap>[:<font>]      Load kmap and font(optional).
-#      * is2                        Enables suspend2 support(required for suspend2 users).
 #      * rescue                     Drops you into a minimal shell
 #      * iswap=<device>             swap device(eg:/dev/sda2) (required for suspend2 users).
 #      * ichkpt=<n>                 Interrupts init and drops to shell.
@@ -46,35 +45,6 @@
 #
 #         o regular key file       --> o It'll be passed to cryptsetup as --key-file
 #
-#        == Suspend2 ==  
-#         Suspend2 users should always boot with 'is2', special care must be taken to ensure that
-#        the swap device always has the same major/minor numbers within the initramfs as well as your
-#        running system. (see kernel doc: power/swsusp-dmcrypt.txt)
-#        To achieve this, the init script will always decrypt your swap partition first whether you're resuming
-#        from hibernation or not.
-#         
-#        IMPORTANT:
-#         There are certain scenarios that can lead to data loss or corruption, you should read   
-#        suspend2 documentation resources, in particular:
-#                 [1] - suspend2.net -> HOWTO -> Avoiding data loss
-#                 [2] - kernel doc: power/suspend2.txt
-#   
-#        WARNING! -- DATA LOSS -- !WARNING
-#                 * Always boot with is2 argument, even if you're not resuming from hibernation.
-#                 * Attempting to resume with different kernel(eg: recompiled kernel):
-#                     If the second kernel has suspend2 support:
-#                     You will get a BIG FAT WARNING about version mismatch, 
-#                     Press 'Shift' to reboot, DO NOT CONTINUE.
-#                     Then boot with noresume2.
-#                     Resuming with a different kernel will corrupt/crash the system
-#                     and might cause filesystem damage. (See: Suspend2.net FAQ 5.13)
-#                 * Booting a kernel with noresume2(or a non suspend2 kernel) and then resuming
-#                 from a previous image.
-#                 * Mounting(even as ro) partitions that where mounted when you suspended(hibernated), and
-#                 then trying to resume.
-#                     Use the hibernate script to control unmounting partitions. 
-#       
-#         DANGER: Back up your data!
 # 
 #        == Kernel parameters example ==
 #        o) Partition(s): root -- Key: regular passphrase
@@ -86,14 +56,6 @@
 #           root=/dev/sda3 ikey_root=none:/dev/sdb1:/path/to/keyfile
 #        o) Partition(s): root -- Key: gpg encrypted key on usb stick
 #           root=/dev/sda3 ikey_root=gpg:/dev/sdb1:/path/to/file
-#        o) Partition(s): swap root -- Suspend2 noresume2 -- Key(s): gpg, regular keyfile
-#           root=/dev/sda3 is2 noresume2 iswap=/dev/sda2 ikey_root=none:/dev/sdb1:/path/to/rootkey \
-#           ikey_swap=gpg:/dev/sdb1:/path/to/swapkey.gpg
-#        o) Partition: swap -- Suspend2 resume2(resuming from hibernation) -- Key: regular passphrase
-#           is2 iswap=/dev/sda2 resume2=swap:/dev/mapper/swap
-#        o) Partition: swap -- Suspend2 resume2 -- Key: gpg protected key on usb stick
-#           is2 iswap=/dev/sda2 resume2=swap:/dev/mapper/swap \
-#           ikey_swap=gpg:/dev/sdb1:/path/to/swapkey.gpg 
 #
 #	 == Modules == 	
 #       If you need to load modules, create the groups you need in /etc/modules/ (inside initramfs / ),
@@ -101,7 +63,6 @@
 #       they should be loaded.
 #       Supported groups:
 #                * boot           -  boot time modules loaded but not removed.
-#                * suspend2       -  suspend2 module(not required anymore?).
 #                * remdev         -  modules required to access removable device
 #                * gpg            -  modules required to access gpg protected file.
 #
@@ -126,24 +87,12 @@
 #
 #     (ki1) If the same removable device is used for swap and root(99.9% users), it gets mounted twice.
 #
-#     (ki2) some suspend2 users might find annoying being asked for passphrases twice(swap, root)
-#     when booting with noresume2, possible solution(beside using regular keyfiles)
-#     could be having a single gpg encrypted file that contains the two keys.  
-#     At boot, init asks for the passphrase to decrypt the file, stores it in a variable,
-#     then when the keys are needed to decrypt the partitions, init would use the passphrase
-#     to decrypt the gpg file and select the right key for the partition, like this:
-#     <n> = line number of the key for partition.
-#     echo "${gpg_passphrase}" | gpg --no-tty --passphrase-fd 0 --decrypt keys.gpg | head -n <n> | tail -n 1 
-#     the obtained key can then be used with cryptsetup to decrypt the partition.
-#     Caveats:
-#           o) passphrase stored in bash variable, no idea how safe this is. 
 #
 # ToDo:
 #     * lvm support
 #     * raid support	
 #     * steganography support -- retrieve hidden key(s)
 #     * PKCS#11 cryptographic token support
-#     * suspend2 filewriter support
 #
 # Contact:
 #   o) Bugs, critics, feedback, improvements --> reikinio at gmail dot com
@@ -192,7 +141,7 @@ gv_shell_checkpoint=0
 die()
 {
         local lv_msg="$1"
-	umount -n /mnt 2>/dev/null
+	      umount -n /mnt 2>/dev/null
         [ "${gv_splash_silent}" -eq 1 ] && splash_verbose
         echo "${lv_msg}"
         echo 
@@ -306,27 +255,6 @@ shell_checkpoint() {
 		echo "Checkpoint ${lv_level}" 
                 exec /bin/sh
         fi
-}
-
-suspend2_resume() {
-        [ "${gv_splash_silent}" -eq 1 ] && splash_message "Resuming..."
-        splash_daemon_stop
-
-        modprobe_group suspend2
-        if [ -z "${gv_splash_theme}" ]; then
-                if which suspend2ui_text > /dev/null; then
-                        echo `which suspend2ui_text` > /proc/suspend2/userui_program
-                fi
-        else
-                ln -s "/etc/splash/${gv_splash_theme}" /etc/splash/suspend2
-                echo `which suspend2ui_fbsplash` > /proc/suspend2/userui_program
-        fi
-	mount -n -o remount,ro /
-        echo > /proc/suspend2/do_resume
-	mount -n -o remount,rw /
-        rmmod_group suspend2
-	cryptsetup luksClose "${uv_swap_mapping}" 2>/dev/null || cryptsetup remove "${uv_swap_mapping}"
-        die "Error: resume from hibernation failed."
 }
 
 get_key() {
@@ -468,38 +396,8 @@ do_work() {
 	fi
 	print_msg
 	shell_checkpoint 1
-	if [ -n "${gv_active_suspend2}" ]; then
-		# suspend2 users should always boot this way to prevent data loss
-
-		[ -n "${gv_swap_device}" ] || die "Error: suspend2 requires iswap argument."
-		do_swap_work
-
-		if [ "${gv_active_suspend2}" -eq 1 ]; then
-
-			local lv_s2img="`cat /proc/suspend2/image_exists | head -n 1`"
-			[ "${lv_s2img}" -eq 0 ] && die "Error: no image exist at location pointed by resume2="
-			if [ "${lv_s2img}" -ne 1 ]; then
-				echo
-				echo "WARNING: there is no recognizable signature at location pointed by resume2="
-				echo -n "Do you want to proceed(type:yes)? "
-				read lv_answer
-				[ "${lv_answer}" != "yes" ] && die "resume aborted by user"
-			fi      
-			suspend2_resume
-		else
-			# noresume2  
-			# open swap, open root, destroy suspend2 image, switch root
-			do_root_work
-			echo "Destroying previous suspend2 image(if any).."
-			echo 0 > /proc/suspend2/image_exists
-			# alternative: mkswap "/dev/mapper/${uv_swap_mapping}" 2>/dev/null >/dev/null
-			do_switch
-		fi	
-
-	else
-                do_root_work
-                do_switch
-	fi
+  do_root_work
+  do_switch
 }
 
 do_switch() {
@@ -545,14 +443,6 @@ parse_cmdl_args() {
 			CONSOLE=*)
 				gv_splash_console="`echo "${param}" | cut -d'=' -f2`"
 				;;
-			is2)
-				# check if booting with noresume2
-				if [ -z "`grep noresume2 /proc/cmdline`" ]; then
-					gv_active_suspend2=1
-				else
-					gv_active_suspend2=0
-				fi
-				;;
 			ikmap=*)
 				gv_kmap="`echo "${param}" | cut -d'=' -f2 | cut -d':' -f1`"
 				gv_font="`echo "${param}" | cut -d':' -s -f2`"		
@@ -581,15 +471,15 @@ parse_cmdl_args() {
 
 main() {
 	export PATH=/sbin:/bin:/usr/bin
-#	dmesg -n 1
-        umask 0077
+	dmesg -n 1
+  umask 0077
 	[ ! -d /proc ] && mkdir /proc
 	/bin/mount -t proc proc /proc
-#       # install busybox applets
-#       /bin/busybox --install -s
+  # install busybox applets
+  /bin/busybox --install -s
 	[ "$uv_check_env" -eq 1 ] && check_busybox_applets
 	[ "$uv_check_env" -eq 1 ] && bin_exist "cryptsetup" "--"
-        [ ! -d /tmp ] && mkdir /tmp
+  [ ! -d /tmp ] && mkdir /tmp
 	[ ! -d /mnt ] && mkdir /mnt
 	[ ! -d /new-root ] && mkdir /new-root
 	/bin/mount -t sysfs sysfs /sys
