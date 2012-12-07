@@ -1,0 +1,1 @@
+Original from http://en.gentoo-wiki.com/wiki/DM-Crypt_with_LUKS#Initramfs.27s_init
